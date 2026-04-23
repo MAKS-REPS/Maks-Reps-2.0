@@ -7,12 +7,11 @@ import re
 
 # --- KONFIGURACJA ---
 TOKEN = os.getenv('DISCORD_TOKEN')
-# Nowe ID kanału z Twojej wiadomości
 ALLOWED_CHANNEL_ID = 1457766095531278529 
 BASE_SITE_URL = "https://maks-reps.github.io/Maks-Reps/"
 API_URL = "https://api.xms4192.workers.dev/qc?url="
 
-# Uprawnienia
+# Intents są kluczowe - muszą być włączone w Developer Portal!
 intents = discord.Intents.all() 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -23,7 +22,6 @@ class QCView(discord.ui.View):
         self.original_url = original_url
         self.current_page = 0
         
-        # Link do Twojej strony, który automatycznie otworzy QC Finder
         encoded_url = urllib.parse.quote(original_url)
         full_url = f"{BASE_SITE_URL}?url={encoded_url}"
         self.add_item(discord.ui.Button(label="More QC!", style=discord.ButtonStyle.link, url=full_url))
@@ -31,7 +29,7 @@ class QCView(discord.ui.View):
     def create_embed(self):
         embed = discord.Embed(title="Maks Reps | Quality Checks", color=0xff0000)
         embed.set_image(url=self.photos[self.current_page])
-        embed.set_footer(text=f"Zdjęcie {self.current_page + 1}/{len(self.photos)} • Maks-Reps Tools")
+        embed.set_footer(text=f"Zdjęcie {self.current_page + 1}/{len(self.photos)}")
         return embed
 
     @discord.ui.button(label="⬅️ Poprzednie", style=discord.ButtonStyle.gray)
@@ -52,28 +50,22 @@ class QCView(discord.ui.View):
 
 @bot.event
 async def on_ready():
-    # To zobaczysz w logach Railway, gdy bot wstanie
-    print(f"✅ Bot QC gotowy! Działa na kanale: {ALLOWED_CHANNEL_ID}")
+    print(f"✅ BOT STATUS: ONLINE")
+    print(f"✅ ZALOGOWANO JAKO: {bot.user}")
 
 @bot.event
 async def on_message(message):
-    # Ignoruj boty
     if message.author.bot: return
-    
-    # Blokada tylko dla wybranego kanału qc-finder
     if message.channel.id != ALLOWED_CHANNEL_ID: return
 
-    # Wyłapywanie linku z tekstu
     urls = re.findall(r'(https?://\S+)', message.content)
     if not urls: return
     
     raw_url = urls[0]
-    platforms = ["weidian.com", "taobao.com", "1688.com", "kakobuy.com", "usfans.com", "allchinabuy.com", "ikako.vip"]
-    
-    if any(p in raw_url for p in platforms):
+    # Lista obsługiwanych platform
+    if any(p in raw_url for p in ["weidian.com", "taobao.com", "1688.com", "kakobuy.com", "usfans.com", "allchinabuy.com"]):
         try:
-            # Odpytywanie Twojego API o zdjęcia
-            r = requests.get(f"{API_URL}{urllib.parse.quote(raw_url)}")
+            r = requests.get(f"{API_URL}{urllib.parse.quote(raw_url)}", timeout=10)
             data = r.json()
             
             photos = []
@@ -91,6 +83,11 @@ async def on_message(message):
                 view = QCView(photos, raw_url)
                 await message.reply(embed=view.create_embed(), view=view)
         except Exception as e:
-            print(f"Błąd API: {e}")
+            print(f"BŁĄD API: {e}")
 
-bot.run(TOKEN)
+# Railway wymaga czasami zbindowania portu, choć bot go nie używa
+if __name__ == "__main__":
+    if not TOKEN:
+        print("❌ BŁĄD: Brak DISCORD_TOKEN w zmiennych środowiskowych!")
+    else:
+        bot.run(TOKEN)
