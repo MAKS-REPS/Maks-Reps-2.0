@@ -37,12 +37,51 @@ bot = MaksBot()
 
 @bot.event
 async def on_ready():
-    print(f"🚀 Systemy sprawne: Welcome, Roles, Tickets, Giveaway.")
+    print(f"🚀 Systemy sprawne: Welcome, Roles, Tickets, Giveaway, Embeds.")
 
 # --- POWITANIA ---
 @bot.event
 async def on_member_join(member):
     await handle_welcome(member, WELCOME_CHANNEL_ID, MAKS_BLUE)
+
+# --- NOWA KOMENDA /EMBED ---
+@bot.tree.command(name="embed", description="Wysyła spersonalizowany komunikat w ramce (Embed)")
+@app_commands.describe(
+    tytul="Nagłówek wiadomości",
+    opis="Treść wiadomości (użyj \\n dla nowej linii)",
+    kolor="Kolor paska w formacie HEX (np. #ff0000 lub zostaw puste dla domyślnego)"
+)
+async def create_embed(interaction: discord.Interaction, tytul: str, opis: str, kolor: str = None):
+    # Sprawdzenie uprawnień (tak samo jak w panelu i giveaway)
+    if not any(role.id == REQUIRED_ROLE_ID for role in interaction.user.roles):
+        return await interaction.response.send_message("❌ Brak uprawnień do używania tej komendy.", ephemeral=True)
+
+    # Logika koloru
+    if kolor:
+        try:
+            # Zamiana HEX na int
+            embed_color = int(kolor.replace("#", ""), 16)
+        except ValueError:
+            return await interaction.response.send_message("❌ Błędny format koloru HEX! Użyj np. #ff0000", ephemeral=True)
+    else:
+        embed_color = MAKS_BLUE
+
+    # Tworzenie embeda
+    # Zamiana \n wpisanego w komendzie na prawdziwy znak nowej linii
+    format_opis = opis.replace("\\n", "\n")
+    
+    new_embed = discord.Embed(
+        title=tytul,
+        description=format_opis,
+        color=embed_color
+    )
+    
+    # Opcjonalnie: Stopka z informacją kto wysłał
+    new_embed.set_footer(text=f"Wiadomość wysłana przez {interaction.user.display_name}")
+
+    # Wysyłanie
+    await interaction.response.send_message("✅ Embed wysłany!", ephemeral=True)
+    await interaction.channel.send(embed=new_embed)
 
 # --- KOMENDA /PANEL (TICKETY I ROLE) ---
 @bot.tree.command(name="panel", description="Wybierz typ panelu do wysłania")
@@ -87,16 +126,13 @@ async def givcreate(
     zwyciezcy: int, 
     kolor: str = "#3498db"
 ):
-    # Sprawdzanie uprawnień administratora/wymaganej roli
     if not any(role.id == REQUIRED_ROLE_ID for role in interaction.user.roles):
         return await interaction.response.send_message("❌ Nie masz uprawnień do tworzenia konkursów.", ephemeral=True)
 
-    # Przeliczenie formatu czasu na sekundy
     sekundy = parse_time(czas)
     if not sekundy:
         return await interaction.response.send_message("❌ Błędny format czasu (użyj np. 1h, 30m, 1d).", ephemeral=True)
 
-    # Uruchomienie logiki z pliku giveaway.py
     await run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor, MAKS_BLUE)
 
 # --- URUCHOMIENIE ---
