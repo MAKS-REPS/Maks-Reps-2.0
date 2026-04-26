@@ -25,21 +25,19 @@ class MaksBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        # FIX: Przekazujemy ID ról do RoleView, aby uniknąć błędu TypeError
+        # Rejestracja widoków, aby działały po restarcie bota
         self.add_view(RoleView(ROLE_TIKTOK_ID, ROLE_PROMOCJE_ID))
-        
-        # Rejestracja pozostałych widoków
         self.add_view(TicketView())
         self.add_view(GiveawayView())
         
         await self.tree.sync()
-        print(f"✅ Bot zalogowany jako {self.user} i zsynchronizowany.")
+        print(f"✅ Bot {self.user} gotowy. Komendy zsynchronizowane.")
 
 bot = MaksBot()
 
 @bot.event
 async def on_ready():
-    print(f"🚀 Wszystkie systemy (Welcome, Roles, Tickets, Giveaway) są gotowe!")
+    print(f"🚀 Systemy sprawne: Welcome, Roles, Tickets, Giveaway.")
 
 # --- POWITANIA ---
 @bot.event
@@ -53,9 +51,8 @@ async def on_member_join(member):
     app_commands.Choice(name="Role (Pingi)", value="roles")
 ])
 async def panel(interaction: discord.Interaction, typ: str):
-    # Sprawdzanie uprawnień (tylko osoby z rolą administratora/wymaganą)
     if not any(role.id == REQUIRED_ROLE_ID for role in interaction.user.roles):
-        return await interaction.response.send_message("❌ Brak uprawnień do tej komendy.", ephemeral=True)
+        return await interaction.response.send_message("❌ Brak uprawnień.", ephemeral=True)
 
     if typ == "tickets":
         embed = discord.Embed(
@@ -71,26 +68,35 @@ async def panel(interaction: discord.Interaction, typ: str):
             description="🎁 **Ping Promocje**\n→ Otrzymuj powiadomienia o promocjach!\n\n🎬 **Ping TikTok**\n→ Otrzymuj powiadomienia z tiktoka!",
             color=discord.Color.red()
         )
-        # Tutaj również przekazujemy ID przy wysyłaniu nowego panelu
         await interaction.response.send_message(embed=embed, view=RoleView(ROLE_TIKTOK_ID, ROLE_PROMOCJE_ID))
 
 # --- KOMENDA /GIVCREATE (GIVEAWAY) ---
-@bot.tree.command(name="givcreate", description="Tworzy nowy giveaway")
+@bot.tree.command(name="givcreate", description="Tworzy nowy, w pełni modyfikowalny giveaway")
 @app_commands.describe(
-    tytul="Tytuł konkursu",
-    opis="Nagroda i opis wymagań",
-    czas="Czas trwania (np. 10m, 1h, 1d)",
+    tytul="Wpisz tytuł (np. 7x 500CNY)",
+    opis="Wpisz tutaj wszystkie zasady (użyj \\n dla nowej linii)",
+    czas="Czas trwania (np. 1h, 30m, 1d)",
     zwyciezcy="Liczba wygranych osób",
     kolor="Kolor paska HEX (np. #3498db)"
 )
-async def givcreate(interaction: discord.Interaction, tytul: str, opis: str, czas: str, zwyciezcy: int, kolor: str = "#3498db"):
+async def givcreate(
+    interaction: discord.Interaction, 
+    tytul: str, 
+    opis: str, 
+    czas: str, 
+    zwyciezcy: int, 
+    kolor: str = "#3498db"
+):
+    # Sprawdzanie uprawnień administratora/wymaganej roli
     if not any(role.id == REQUIRED_ROLE_ID for role in interaction.user.roles):
-        return await interaction.response.send_message("❌ Brak uprawnień.", ephemeral=True)
+        return await interaction.response.send_message("❌ Nie masz uprawnień do tworzenia konkursów.", ephemeral=True)
 
+    # Przeliczenie formatu czasu na sekundy
     sekundy = parse_time(czas)
     if not sekundy:
-        return await interaction.response.send_message("❌ Błędny format czasu (użyj np. 1h, 30m).", ephemeral=True)
+        return await interaction.response.send_message("❌ Błędny format czasu (użyj np. 1h, 30m, 1d).", ephemeral=True)
 
+    # Uruchomienie logiki z pliku giveaway.py
     await run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor, MAKS_BLUE)
 
 # --- URUCHOMIENIE ---
