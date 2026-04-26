@@ -7,8 +7,9 @@ import os
 from welcome import handle_welcome
 from roles import RoleView
 from tickets import TicketView
-from giveaway import GiveawayView, parse_time, run_giveaway_logic
-from embeds import setup_embed_command  # Import nowej funkcji
+# Dodano import get_giveaway_count
+from giveaway import GiveawayView, parse_time, run_giveaway_logic, get_giveaway_count
+from embeds import setup_embed_command
 
 # --- KONFIGURACJA ---
 WELCOME_CHANNEL_ID = 1457756805173084309
@@ -30,7 +31,7 @@ class MaksBot(commands.Bot):
         self.add_view(TicketView())
         self.add_view(GiveawayView())
         
-        # INICJALIZACJA KOMENDY EMBED Z OSOBNEGO PLIKU
+        # Inicjalizacja komendy embed
         await setup_embed_command(self, REQUIRED_ROLE_ID, MAKS_BLUE)
         
         await self.tree.sync()
@@ -87,6 +88,33 @@ async def givcreate(interaction: discord.Interaction, tytul: str, opis: str, cza
         return await interaction.response.send_message("❌ Błędny format czasu.", ephemeral=True)
 
     await run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor, MAKS_BLUE)
+
+# --- NOWA KOMENDA /CHECKGIVPEOPLES ---
+@bot.tree.command(name="checkgivpeoples", description="Sprawdza liczbę uczestników trwającego konkursu")
+@app_commands.describe(message_id="Wklej ID wiadomości z giveawayem")
+async def checkgivpeoples(interaction: discord.Interaction, message_id: str):
+    # Sprawdzenie uprawnień
+    if not any(role.id == REQUIRED_ROLE_ID for role in interaction.user.roles):
+        return await interaction.response.send_message("❌ Brak uprawnień.", ephemeral=True)
+
+    try:
+        msg_id = int(message_id)
+    except ValueError:
+        return await interaction.response.send_message("❌ Podane ID musi być liczbą!", ephemeral=True)
+
+    # Pobieranie liczby uczestników z modułu giveaway
+    count = get_giveaway_count(msg_id)
+
+    if count is None:
+        await interaction.response.send_message(
+            "❌ Nie znaleziono aktywnego konkursu o tym ID (mógł się już skończyć).", 
+            ephemeral=True
+        )
+    else:
+        await interaction.response.send_message(
+            f"📊 Obecnie w konkursie bierze udział: **{count}** osób.", 
+            ephemeral=True
+        )
 
 # --- URUCHOMIENIE ---
 token = os.getenv('DISCORD_TOKEN')
