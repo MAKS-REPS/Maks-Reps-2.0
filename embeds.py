@@ -5,8 +5,8 @@ async def setup_embed_command(bot, REQUIRED_ROLE_ID, MAKS_BLUE):
     @bot.tree.command(name="embed", description="Wysyła spersonalizowany komunikat w ramce (Embed)")
     @app_commands.describe(
         tytul="Nagłówek wiadomości",
-        opis="Treść wiadomości (użyj \\n dla nowej linii)",
-        kolor="Kolor paska w formacie HEX (np. #ff0000 lub zostaw puste dla domyślnego)"
+        opis="Treść (możesz oznaczać role używając <@&ID_ROLI>)",
+        kolor="Kolor paska HEX (np. #ff0000 lub zostaw puste)"
     )
     async def create_embed(interaction: discord.Interaction, tytul: str, opis: str, kolor: str = None):
         # Sprawdzenie uprawnień
@@ -19,11 +19,13 @@ async def setup_embed_command(bot, REQUIRED_ROLE_ID, MAKS_BLUE):
                 hex_str = kolor.replace("#", "")
                 embed_color = int(hex_str, 16)
             except ValueError:
-                return await interaction.response.send_message("❌ Błędny format koloru HEX! Użyj np. #ff0000", ephemeral=True)
+                return await interaction.response.send_message("❌ Błędny format koloru HEX!", ephemeral=True)
         else:
             embed_color = MAKS_BLUE
 
-        # Formatowanie nowej linii
+        # Obsługa formatowania:
+        # 1. Zamiana \n na prawdziwe nowe linie
+        # 2. Discord sam zamieni <@&ID> na nazwę roli w opisie
         format_opis = opis.replace("\\n", "\n")
         
         new_embed = discord.Embed(
@@ -32,7 +34,10 @@ async def setup_embed_command(bot, REQUIRED_ROLE_ID, MAKS_BLUE):
             color=embed_color
         )
         
-        new_embed.set_footer(text=f"Wysłane przez: {interaction.user.display_name}")
+        new_embed.set_footer(text=f"Wiadomość wysłana przez: {interaction.user.display_name}")
 
+        # Wysłanie potwierdzenia (widoczne tylko dla Ciebie)
         await interaction.response.send_message("✅ Embed wysłany!", ephemeral=True)
+        
+        # Wysłanie właściwego embeda na kanał
         await interaction.channel.send(embed=new_embed)
