@@ -1,3 +1,4 @@
+
 import discord
 import datetime
 import asyncio
@@ -6,9 +7,6 @@ import re
 
 # ID Twojej roli dającej 2x szansy
 BONUS_ROLE_ID = 1497656242615746721
-
-# Słownik do śledzenia aktywnych konkursów: {message_id: view_object}
-active_giveaways = {}
 
 class GiveawayView(discord.ui.View):
     def __init__(self):
@@ -30,12 +28,6 @@ def parse_time(time_str):
         return int(match.group(1)) * pos[match.group(2)]
     return None
 
-# Funkcja którą wywołasz w bot.py
-def get_giveaway_count(message_id):
-    if message_id in active_giveaways:
-        return len(active_giveaways[message_id].entries)
-    return None
-
 async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor_hex, default_color):
     try:
         color_val = int(kolor_hex.replace("#", ""), 16)
@@ -45,6 +37,7 @@ async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor
     end_time = datetime.datetime.now() + datetime.timedelta(seconds=sekundy)
     timestamp = int(end_time.timestamp())
 
+    # Opis jest teraz w 100% Twoim tekstem z komendy
     embed = discord.Embed(
         title=tytul,
         description=opis.replace("\\n", "\n"), 
@@ -58,17 +51,9 @@ async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor
 
     view = GiveawayView()
     await interaction.response.send_message(content="🎉 **GIVEAWAY** 🎉", embed=embed, view=view)
-    
-    # Pobieramy wiadomość, aby znać jej ID
     msg = await interaction.original_response()
-    
-    # DODAJEMY DO REJESTRU AKTYWNYCH KONKURSÓW
-    active_giveaways[msg.id] = view
 
     await asyncio.sleep(sekundy)
-
-    # USUWAMY Z REJESTRU PO ZAKOŃCZENIU
-    active_giveaways.pop(msg.id, None)
 
     if not view.entries:
         return await interaction.followup.send(f"Konkurs **{tytul}** zakończył się brakiem chętnych.")
