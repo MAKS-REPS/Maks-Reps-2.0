@@ -1,4 +1,3 @@
-
 import discord
 import datetime
 import asyncio
@@ -19,6 +18,25 @@ class GiveawayView(discord.ui.View):
             return await interaction.response.send_message("Już bierzesz udział w tym konkursie!", ephemeral=True)
         
         self.entries.append(interaction.user.id)
+        
+        # Pobieramy aktualny embed z wiadomości
+        embed = interaction.message.embeds[0]
+        
+        # Szukamy pola "Entries", aby je zaktualizować na żywo
+        found_field = False
+        for i, field in enumerate(embed.fields):
+            if field.name == "Entries":
+                embed.set_field_at(i, name="Entries", value=str(len(self.entries)), inline=True)
+                found_field = True
+                break
+        
+        # Jeśli z jakiegoś powodu pola nie ma, dodajemy je
+        if not found_field:
+            embed.add_field(name="Entries", value=str(len(self.entries)), inline=True)
+
+        # Edytujemy wiadomość konkursową z nową liczbą osób
+        await interaction.message.edit(embed=embed)
+        
         await interaction.response.send_message("Pomyślnie dołączyłeś do losowania!", ephemeral=True)
 
 def parse_time(time_str):
@@ -37,7 +55,6 @@ async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor
     end_time = datetime.datetime.now() + datetime.timedelta(seconds=sekundy)
     timestamp = int(end_time.timestamp())
 
-    # Opis jest teraz w 100% Twoim tekstem z komendy
     embed = discord.Embed(
         title=tytul,
         description=opis.replace("\\n", "\n"), 
@@ -47,6 +64,8 @@ async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor
     embed.add_field(name="Ends:", value=f"<t:{timestamp}:R> (<t:{timestamp}:f>)", inline=False)
     embed.add_field(name="Hosted by:", value=interaction.user.mention, inline=True)
     embed.add_field(name="Winners:", value=str(zwyciezcy), inline=True)
+    # Pole "Entries" widoczne od samego początku
+    embed.add_field(name="Entries", value="0", inline=True)
     embed.set_footer(text=f"Dzisiaj o {datetime.datetime.now().strftime('%H:%M')}")
 
     view = GiveawayView()
@@ -56,7 +75,12 @@ async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor
     await asyncio.sleep(sekundy)
 
     if not view.entries:
-        return await interaction.followup.send(f"Konkurs **{tytul}** zakończył się brakiem chętnych.")
+        # Edycja embeda w przypadku braku chętnych
+        end_embed = embed.copy()
+        end_embed.description = f"Zakończono! Nikt nie wziął udziału w: **{tytul}**"
+        end_embed.color = discord.Color.red()
+        await msg.edit(embed=end_embed, view=None)
+        return
 
     # Logika 2x szansy dla roli
     pool = []
@@ -68,6 +92,7 @@ async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor
             pool.append(user_id) 
 
     winners_list = []
+    # Liczymy unikalnych uczestników (len(view.entries) to liczba kliknięć)
     num_winners = min(zwyciezcy, len(set(view.entries)))
     
     while len(winners_list) < num_winners:
@@ -77,10 +102,13 @@ async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor
 
     winner_mentions = ", ".join([f"<@{w}>" for w in winners_list])
 
+    # Końcowy embed
     end_embed = embed.copy()
     end_embed.description = f"Zakończono! Nagroda: **{tytul}**"
     end_embed.clear_fields()
-    end_embed.add_field(name="Zwycięzcy:", value=winner_mentions, inline=False)
+    end_embed.add_field(name="Winners:", value=winner_mentions, inline=False)
+    # Wyświetlamy ostateczną liczbę osób, które wzięły udział
+    end_embed.add_field(name="Entries", value=str(len(view.entries)), inline=True)
     end_embed.color = discord.Color.red()
 
     await msg.edit(embed=end_embed, view=None)
