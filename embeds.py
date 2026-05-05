@@ -34,7 +34,8 @@ async def setup_embed_command(bot, REQUIRED_ROLE_ID, MAKS_BLUE):
             color=embed_color
         )
         
-        new_embed.set_footer(text=f"Wiadomość wysłana przez: {interaction.user.display_name}")
+        # Tutaj dodałem Twój znaczek:
+        new_embed.set_footer(text=f"Wysłane przez: {interaction.user.display_name} • Made By Maks.R3ps")
 
         # Wysłanie potwierdzenia (widoczne tylko dla Ciebie)
         await interaction.response.send_message("✅ Embed wysłany!", ephemeral=True)
