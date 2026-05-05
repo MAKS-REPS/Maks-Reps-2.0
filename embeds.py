@@ -23,9 +23,7 @@ async def setup_embed_command(bot, REQUIRED_ROLE_ID, MAKS_BLUE):
         else:
             embed_color = MAKS_BLUE
 
-        # Obsługa formatowania:
-        # 1. Zamiana \n na prawdziwe nowe linie
-        # 2. Discord sam zamieni <@&ID> na nazwę roli w opisie
+        # Obsługa formatowania tekstu
         format_opis = opis.replace("\\n", "\n")
         
         new_embed = discord.Embed(
@@ -34,10 +32,10 @@ async def setup_embed_command(bot, REQUIRED_ROLE_ID, MAKS_BLUE):
             color=embed_color
         )
         
-        # Tutaj dodałem Twój znaczek:
-        new_embed.set_footer(text=f"Wysłane przez: {interaction.user.display_name} • Made By Maks.R3ps")
+        # Stopka z "malutkim" znaczkiem przy użyciu znaków superscript
+        new_embed.set_footer(text=f"Wysłane przez: {interaction.user.display_name}  •  ᵐᵃᵈᵉ ᵇʸ ᵐᵃᵏˢ.ʳ³ᵖˢ")
 
-        # Wysłanie potwierdzenia (widoczne tylko dla Ciebie)
+        # Wysłanie potwierdzenia (widoczne tylko dla wywołującego)
         await interaction.response.send_message("✅ Embed wysłany!", ephemeral=True)
         
         # Wysłanie właściwego embeda na kanał
