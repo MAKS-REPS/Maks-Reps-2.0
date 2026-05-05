@@ -8,7 +8,7 @@ from welcome import handle_welcome
 from roles import RoleView
 from tickets import TicketView
 from giveaway import GiveawayView, parse_time, run_giveaway_logic
-from embeds import setup_embed_command  # Import nowej funkcji
+from embeds import setup_embed_command
 
 # --- KONFIGURACJA ---
 WELCOME_CHANNEL_ID = 1457756805173084309
@@ -25,12 +25,12 @@ class MaksBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        # Rejestracja widoków
+        # Rejestracja widoków dla trwałości (persistent views)
         self.add_view(RoleView(ROLE_TIKTOK_ID, ROLE_PROMOCJE_ID))
         self.add_view(TicketView())
         self.add_view(GiveawayView())
         
-        # INICJALIZACJA KOMENDY EMBED Z OSOBNEGO PLIKU
+        # Inicjalizacja zewnętrznych komend
         await setup_embed_command(self, REQUIRED_ROLE_ID, MAKS_BLUE)
         
         await self.tree.sync()
@@ -46,6 +46,32 @@ async def on_ready():
 @bot.event
 async def on_member_join(member):
     await handle_welcome(member, WELCOME_CHANNEL_ID, MAKS_BLUE)
+
+# --- KOMENDA /ID (NOWA) ---
+@bot.tree.command(name="id", description="Pobiera ID wskazanego kanału, roli lub użytkownika")
+@app_commands.describe(
+    kanal="Wybierz kanał, którego ID chcesz uzyskać",
+    rola="Wybierz rolę, której ID chcesz uzyskać",
+    uzytkownik="Wybierz osobę, której ID chcesz uzyskać"
+)
+async def get_id(
+    interaction: discord.Interaction, 
+    kanal: discord.abc.GuildChannel = None, 
+    rola: discord.Role = None, 
+    uzytkownik: discord.Member = None
+):
+    # Sprawdzenie uprawnień
+    if not any(role.id == REQUIRED_ROLE_ID for role in interaction.user.roles):
+        return await interaction.response.send_message("❌ Brak uprawnień.", ephemeral=True)
+
+    if kanal:
+        await interaction.response.send_message(f"🆔 ID kanału **{kanal.name}**: `{kanal.id}`", ephemeral=True)
+    elif rola:
+        await interaction.response.send_message(f"🆔 ID roli **{rola.name}**: `{rola.id}`", ephemeral=True)
+    elif uzytkownik:
+        await interaction.response.send_message(f"🆔 ID użytkownika **{uzytkownik.name}**: `{uzytkownik.id}`", ephemeral=True)
+    else:
+        await interaction.response.send_message("❌ Musisz wybrać jedną z opcji!", ephemeral=True)
 
 # --- KOMENDA /PANEL ---
 @bot.tree.command(name="panel", description="Wybierz typ panelu do wysłania")
