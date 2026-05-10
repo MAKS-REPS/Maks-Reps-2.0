@@ -5,7 +5,7 @@ import os
 
 # --- IMPORTY TWOICH MODUŁÓW ---
 from welcome import handle_welcome
-# Importujemy wszystkie 3 klasy widoków z roles.py
+from dm import send_welcome_dm  # Nowy import dla wiadomości prywatnych
 from roles import RoleViewAll, RoleViewPromo, RoleViewTikTok
 from tickets import TicketView
 from giveaway import GiveawayView, parse_time, run_giveaway_logic
@@ -49,7 +49,11 @@ async def on_ready():
 # --- POWITANIA ---
 @bot.event
 async def on_member_join(member):
+    # 1. Powitanie na kanale serwera (z welcome.py)
     await handle_welcome(member, WELCOME_CHANNEL_ID, MAKS_BLUE)
+    
+    # 2. Wiadomość prywatna z linkami (z dm.py)
+    await send_welcome_dm(member, MAKS_BLUE)
 
 # --- KOMENDA /PANEL ---
 @bot.tree.command(name="panel", description="Wybierz typ panelu do wysłania")
@@ -113,5 +117,6 @@ async def givcreate(interaction: discord.Interaction, tytul: str, opis: str, cza
 
     await run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor, MAKS_BLUE)
 
+# --- URUCHOMIENIE ---
 token = os.getenv('DISCORD_TOKEN')
 bot.run(token)
