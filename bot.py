@@ -5,11 +5,12 @@ import os
 
 # --- IMPORTY TWOICH MODUŁÓW ---
 from welcome import handle_welcome
-from dm import send_welcome_dm  # Nowy import dla wiadomości prywatnych
+from dm import send_welcome_dm
 from roles import RoleViewAll, RoleViewPromo, RoleViewTikTok
 from tickets import TicketView
 from giveaway import GiveawayView, parse_time, run_giveaway_logic
 from embeds import setup_embed_command
+from moderation import setup_moderation  # Import modułu moderacji
 
 # --- KONFIGURACJA ---
 WELCOME_CHANNEL_ID = 1457756805173084309
@@ -37,6 +38,10 @@ class MaksBot(commands.Bot):
         # INICJALIZACJA KOMENDY EMBED
         await setup_embed_command(self, REQUIRED_ROLE_ID, MAKS_BLUE)
         
+        # --- INICJALIZACJA SYSTEMU MODERACJI ---
+        await setup_moderation(self)
+        
+        # Synchronizacja drzewa komend
         await self.tree.sync()
         print(f"✅ Bot {self.user} gotowy. Wszystkie systemy załadowane.")
 
@@ -64,7 +69,7 @@ async def on_member_join(member):
     app_commands.Choice(name="Role: Tylko Filmy (TikTok)", value="roles_tiktok")
 ])
 async def panel(interaction: discord.Interaction, typ: app_commands.Choice[str]):
-    # Sprawdzanie uprawnień
+    # Sprawdzanie uprawnień (czy użytkownik ma rolę Ownera)
     if not any(role.id == REQUIRED_ROLE_ID for role in interaction.user.roles):
         return await interaction.response.send_message("❌ Brak uprawnień.", ephemeral=True)
 
