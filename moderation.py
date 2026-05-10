@@ -14,6 +14,25 @@ class Moderation(app_commands.Group):
         super().__init__(name="mod", description="Komendy moderacyjne")
         self.bot = bot
 
+    async def check_hierarchy(self, interaction: discord.Interaction, target: discord.Member) -> bool:
+        """Zwraca True, jeśli moderator może wykonać akcję na celu."""
+        # Sprawdzenie czy cel to nie sam moderator
+        if target.id == interaction.user.id:
+            await interaction.response.send_message("❌ Nie możesz ukarać samego siebie!", ephemeral=True)
+            return False
+            
+        # Sprawdzenie czy cel to nie właściciel serwera
+        if target.id == interaction.guild.owner_id:
+            await interaction.response.send_message("❌ Nie możesz ukarać właściciela serwera!", ephemeral=True)
+            return False
+
+        # Sprawdzenie pozycji ról
+        if interaction.user.top_role.position <= target.top_role.position:
+            await interaction.response.send_message("❌ Nie możesz ukarać osoby z taką samą lub wyższą rangą!", ephemeral=True)
+            return False
+            
+        return True
+
     async def send_mod_embed(self, interaction: discord.Interaction, title: str, user: discord.Member, reason: str, duration: str = None):
         embed = discord.Embed(
             title=title,
@@ -32,45 +51,57 @@ class Moderation(app_commands.Group):
         embed.set_thumbnail(url=user.display_avatar.url)
         embed.set_footer(text="Maks Reps Bot")
         
-        await interaction.response.send_message(embed=embed)
+        # Jeśli interaction nie zostało jeszcze "odpowiedziane" (response)
+        if not interaction.response.is_done():
+            await interaction.response.send_message(embed=embed)
+        else:
+            await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="ban", description="Banuje użytkownika")
     @app_commands.describe(uzytkownik="Kogo zbanować", powod="Dlaczego")
     async def ban(self, interaction: discord.Interaction, uzytkownik: discord.Member, powod: str = "Brak powodu"):
         if not has_mod_role(interaction):
-            return await interaction.response.send_message("❌ Nie masz uprawnień do tej komendy.", ephemeral=True)
+            return await interaction.response.send_message("❌ Nie masz uprawnień.", ephemeral=True)
+        
+        if not await self.check_hierarchy(interaction, uzytkownik):
+            return
         
         try:
             await uzytkownik.ban(reason=powod)
             await self.send_mod_embed(interaction, "🔨 Użytkownik został zbanowany", uzytkownik, powod)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Błąd: {e}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Błąd bota: {e}", ephemeral=True)
 
     @app_commands.command(name="kick", description="Wyrzuca użytkownika")
     async def kick(self, interaction: discord.Interaction, uzytkownik: discord.Member, powod: str = "Brak powodu"):
         if not has_mod_role(interaction):
-            return await interaction.response.send_message("❌ Nie masz uprawnień do tej komendy.", ephemeral=True)
+            return await interaction.response.send_message("❌ Nie masz uprawnień.", ephemeral=True)
+        
+        if not await self.check_hierarchy(interaction, uzytkownik):
+            return
         
         try:
             await uzytkownik.kick(reason=powod)
             await self.send_mod_embed(interaction, "👢 Użytkownik został wyrzucony", uzytkownik, powod)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Błąd: {e}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Błąd bota: {e}", ephemeral=True)
 
     @app_commands.command(name="timeout", description="Wycisza użytkownika (timeout)")
-    @app_commands.describe(uzytkownik="Kogo wyciszyć", minuty="Na ile minut", powod="Dlaczego")
     async def timeout(self, interaction: discord.Interaction, uzytkownik: discord.Member, minuty: int, powod: str = "Brak powodu"):
         if not has_mod_role(interaction):
-            return await interaction.response.send_message("❌ Nie masz uprawnień do tej komendy.", ephemeral=True)
+            return await interaction.response.send_message("❌ Nie masz uprawnień.", ephemeral=True)
+        
+        if not await self.check_hierarchy(interaction, uzytkownik):
+            return
         
         try:
             duration = datetime.timedelta(minutes=minuty)
             await uzytkownik.timeout(duration, reason=powod)
             await self.send_mod_embed(interaction, "🔇 Użytkownik został wyciszony", uzytkownik, powod, f"{minuty}m")
         except Exception as e:
-            await interaction.response.send_message(f"❌ Błąd: {e}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Błąd bota: {e}", ephemeral=True)
 
-    @app_commands.command(name="clear", description="Usuwa określoną liczbę wiadomości")
+    @app_commands.command(name="clear", description="Usuwa wiadomości")
     async def clear(self, interaction: discord.Interaction, ilosc: int):
         if not has_mod_role(interaction):
             return await interaction.response.send_message("❌ Nie masz uprawnień.", ephemeral=True)
