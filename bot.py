@@ -5,13 +5,13 @@ import os
 
 # --- IMPORTY TWOICH MODUŁÓW ---
 from welcome import handle_welcome
-from roles import RoleView
+# Importujemy wszystkie 3 klasy widoków z roles.py
+from roles import RoleViewAll, RoleViewPromo, RoleViewTikTok
 from tickets import TicketView
 from giveaway import GiveawayView, parse_time, run_giveaway_logic
 from embeds import setup_embed_command
 
 # --- KONFIGURACJA ---
-# Uwaga: Te ID działają tylko na serwerze, na którym zostały stworzone!
 WELCOME_CHANNEL_ID = 1457756805173084309
 REQUIRED_ROLE_ID = 1457769309735485450 
 MAKS_BLUE = 0x3498db
@@ -26,8 +26,11 @@ class MaksBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        # Rejestracja widoków
-        self.add_view(RoleView(ROLE_TIKTOK_ID, ROLE_PROMOCJE_ID))
+        # Rejestracja widoków dla trwałości przycisków (Persistence)
+        self.add_view(RoleViewAll(ROLE_TIKTOK_ID, ROLE_PROMOCJE_ID))
+        self.add_view(RoleViewPromo(ROLE_PROMOCJE_ID))
+        self.add_view(RoleViewTikTok(ROLE_TIKTOK_ID))
+        
         self.add_view(TicketView())
         self.add_view(GiveawayView())
         
@@ -52,14 +55,18 @@ async def on_member_join(member):
 @bot.tree.command(name="panel", description="Wybierz typ panelu do wysłania")
 @app_commands.choices(typ=[
     app_commands.Choice(name="Tickety (Pomoc/Dostęp)", value="tickets"),
-    app_commands.Choice(name="Role (Pingi)", value="roles")
+    app_commands.Choice(name="Role: Wszystko", value="roles_all"),
+    app_commands.Choice(name="Role: Tylko Promocje", value="roles_promo"),
+    app_commands.Choice(name="Role: Tylko Filmy (TikTok)", value="roles_tiktok")
 ])
-async def panel(interaction: discord.Interaction, typ: str):
-    # Sprawdzanie uprawnień po ID roli
+async def panel(interaction: discord.Interaction, typ: app_commands.Choice[str]):
+    # Sprawdzanie uprawnień
     if not any(role.id == REQUIRED_ROLE_ID for role in interaction.user.roles):
         return await interaction.response.send_message("❌ Brak uprawnień.", ephemeral=True)
 
-    if typ == "tickets":
+    val = typ.value
+
+    if val == "tickets":
         embed = discord.Embed(
             title="🚨 MAKS REPS × CENTRUM POMOCY", 
             description="**Wybierz kategorię z menu poniżej, aby utworzyć zgłoszenie.**", 
@@ -67,13 +74,29 @@ async def panel(interaction: discord.Interaction, typ: str):
         )
         await interaction.response.send_message(embed=embed, view=TicketView())
     
-    elif typ == "roles":
+    elif val == "roles_all":
         embed = discord.Embed(
             title="☀️ MAKS REPS × WYBIERZ PINGI",
             description="🎁 **Ping Promocje**\n→ Otrzymuj powiadomienia o promocjach!\n\n🎬 **Ping TikTok**\n→ Otrzymuj powiadomienia z tiktoka!",
             color=discord.Color.red()
         )
-        await interaction.response.send_message(embed=embed, view=RoleView(ROLE_TIKTOK_ID, ROLE_PROMOCJE_ID))
+        await interaction.response.send_message(embed=embed, view=RoleViewAll(ROLE_TIKTOK_ID, ROLE_PROMOCJE_ID))
+
+    elif val == "roles_promo":
+        embed = discord.Embed(
+            title="☀️ MAKS.R3PS X PROMOCJE",
+            description="🎁 **Ping Promocje**\n→ Otrzymuj powiadomienia o promocjach!",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, view=RoleViewPromo(ROLE_PROMOCJE_ID))
+
+    elif val == "roles_tiktok":
+        embed = discord.Embed(
+            title="☀️ MAKS.R3PS X FILMY",
+            description="🎬 **Ping TikTok**\n→ Otrzymuj powiadomienia z tiktoka!",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, view=RoleViewTikTok(ROLE_TIKTOK_ID))
 
 # --- KOMENDA /GIVCREATE ---
 @bot.tree.command(name="givcreate", description="Tworzy nowy giveaway")
@@ -90,6 +113,5 @@ async def givcreate(interaction: discord.Interaction, tytul: str, opis: str, cza
 
     await run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor, MAKS_BLUE)
 
-# --- URUCHOMIENIE ---
 token = os.getenv('DISCORD_TOKEN')
 bot.run(token)
