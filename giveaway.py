@@ -1,17 +1,17 @@
 import discord
-from discord.ext import commands
-from discord import app_commands
 import datetime
 import asyncio
 import random
 import re
 import os
+from discord.ext import commands
+from discord import app_commands
 
 # ID Twojej roli dającej 2x szansy
 BONUS_ROLE_ID = 1497656242615746721
 
-# Słownik do przechowywania danych o zakończonych giveawayach (do rerolla)
-ended_giveaways = {}
+# Słownik do przechowywania uczestników zakończonych giveawayów (pod reroll)
+giveaway_cache = {}
 
 class GiveawayView(discord.ui.View):
     def __init__(self):
@@ -89,8 +89,8 @@ async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor
         if member and any(r.id == BONUS_ROLE_ID for r in member.roles):
             pool.append(user_id) 
 
-    # --- ZAPIS DANYCH DLA REROLLA ---
-    ended_giveaways[msg.id] = {"pool": pool, "tytul": tytul}
+    # ZAPISUJEMY DANE DO CACHE (Dla komendy greroll)
+    giveaway_cache[msg.id] = {"pool": pool, "tytul": tytul}
 
     winners_list = []
     num_winners = min(zwyciezcy, len(set(view.entries)))
@@ -112,13 +112,12 @@ async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor
     await msg.edit(embed=end_embed, view=None)
     await interaction.followup.send(f"🎉 Gratulacje {winner_mentions}! Wygraliście: **{tytul}**!")
 
-# --- KONFIGURACJA BOTA ---
+# --- SEKCOJA BOT SETUP ---
 
 class MyBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
         intents.members = True
-        intents.message_content = True
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
@@ -126,32 +125,35 @@ class MyBot(commands.Bot):
 
 bot = MyBot()
 
-@bot.tree.command(name="gstart", description="Uruchamia nowy giveaway")
+@bot.tree.command(name="gstart", description="Uruchamia giveaway")
 async def gstart(interaction: discord.Interaction, tytul: str, czas: str, zwyciezcy: int = 1, opis: str = "Kliknij 🎉 aby dołączyć!"):
     sekundy = parse_time(czas)
     if not sekundy:
         return await interaction.response.send_message("Błędny czas!", ephemeral=True)
     await run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, "#5865F2", 0x5865f2)
 
-# --- KOMENDA REROLL ---
-@bot.tree.command(name="greroll", description="Losuje ponownie zwycięzcę")
-@app_commands.describe(message_id="Podaj ID wiadomości z zakończonym giveawayem")
+# --- NOWA KOMENDA GREROLL ---
+
+@bot.tree.command(name="greroll", description="Losuje nową osobę z zakończonego konkursu")
+@app_commands.describe(message_id="ID wiadomości z zakończonym konkursem")
 async def greroll(interaction: discord.Interaction, message_id: str):
     try:
-        m_id = int(message_id)
+        msg_id = int(message_id)
     except ValueError:
-        return await interaction.response.send_message("❌ To nie jest poprawne ID wiadomości!", ephemeral=True)
+        return await interaction.response.send_message("Musisz podać poprawne ID wiadomości (same cyfry).", ephemeral=True)
 
-    if m_id not in ended_giveaways:
-        return await interaction.response.send_message("❌ Nie znaleziono konkursu w pamięci (lub bot został zrestartowany).", ephemeral=True)
+    if msg_id not in giveaway_cache:
+        return await interaction.response.send_message("Nie znaleziono tego konkursu w pamięci bota (mogło minąć zbyt dużo czasu lub bot był restartowany).", ephemeral=True)
 
-    data = ended_giveaways[m_id]
-    if not data["pool"]:
-        return await interaction.response.send_message("❌ Nikt nie wziął udziału w tym konkursie.", ephemeral=True)
+    data = giveaway_cache[msg_id]
+    pool = data["pool"]
+    tytul = data["tytul"]
 
-    # Losowanie nowego zwycięzcy z zachowaniem 2x szans (pool jest już przeliczony)
-    winner = random.choice(data["pool"])
+    if not pool:
+        return await interaction.response.send_message("Brak uczestników do rozlosowania.", ephemeral=True)
+
+    new_winner = random.choice(pool)
     
-    await interaction.response.send_message(f"🔄 **REROLL!** Nowy zwycięzca konkursu o **{data['tytul']}** to: <@{winner}>! Gratulacje!")
+    await interaction.response.send_message(f"🔄 **REROLL!** Nowy zwycięzca konkursu o **{tytul}** to: <@{new_winner}>! Gratulacje!")
 
 bot.run(os.getenv("DISCORD_TOKEN"))
