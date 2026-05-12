@@ -10,8 +10,7 @@ import os
 # ID Twojej roli dającej 2x szansy
 BONUS_ROLE_ID = 1497656242615746721
 
-# Słownik do przechowywania danych o zakończonych giveawayach
-# Uwaga: Dane znikną po restarcie bota na Railway.
+# Słownik przechowujący dane do rerolla
 ended_giveaways = {}
 
 class GiveawayView(discord.ui.View):
@@ -81,7 +80,6 @@ async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor
         await msg.edit(embed=end_embed, view=None)
         return
 
-    # Logika 2x szansy dla roli
     pool = []
     guild = interaction.guild
     for user_id in view.entries:
@@ -90,11 +88,8 @@ async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor
         if member and any(r.id == BONUS_ROLE_ID for r in member.roles):
             pool.append(user_id) 
 
-    # ZAPISUJEMY DANE DLA REROLLA
-    ended_giveaways[msg.id] = {
-        "pool": pool,
-        "tytul": tytul
-    }
+    # --- ZAPISUJEMY DANE DO REROLLA PRZED WYŚWIETLENIEM WYNIKÓW ---
+    ended_giveaways[msg.id] = {"pool": pool, "tytul": tytul}
 
     winners_list = []
     num_winners = min(zwyciezcy, len(set(view.entries)))
@@ -116,7 +111,7 @@ async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor
     await msg.edit(embed=end_embed, view=None)
     await interaction.followup.send(f"🎉 Gratulacje {winner_mentions}! Wygraliście: **{tytul}**!")
 
-# --- KONFIGURACJA BOTA ---
+# --- KONFIGURACJA BOTA I KOMENDY ---
 
 class MyBot(commands.Bot):
     def __init__(self):
@@ -127,39 +122,33 @@ class MyBot(commands.Bot):
 
     async def setup_hook(self):
         await self.tree.sync()
-        print("✅ Komendy zsynchronizowane")
 
 bot = MyBot()
 
-@bot.tree.command(name="gstart", description="Rozpoczyna nowy giveaway")
+# Stara komenda gstart
+@bot.tree.command(name="gstart", description="Rozpoczyna konkurs")
 async def gstart(interaction: discord.Interaction, tytul: str, czas: str, zwyciezcy: int = 1, opis: str = "Kliknij 🎉 aby dołączyć!"):
     sekundy = parse_time(czas)
     if not sekundy:
-        return await interaction.response.send_message("❌ Niepoprawny czas (użyj np. 10m, 1h, 1d)!", ephemeral=True)
-    
+        return await interaction.response.send_message("Błędny czas!", ephemeral=True)
     await run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, "#5865F2", 0x5865f2)
 
-@bot.tree.command(name="greroll", description="Losuje nowego zwycięzcę dla zakończonego giveawaya")
+# NOWA KOMENDA /greroll
+@bot.tree.command(name="greroll", description="Losuje nowego zwycięzcę")
 @app_commands.describe(message_id="Podaj ID wiadomości z zakończonym giveawayem")
 async def greroll(interaction: discord.Interaction, message_id: str):
     try:
         m_id = int(message_id)
-    except ValueError:
-        return await interaction.response.send_message("❌ Podane ID nie jest poprawne!", ephemeral=True)
+    except:
+        return await interaction.response.send_message("❌ To nie jest poprawne ID wiadomości.", ephemeral=True)
 
     if m_id not in ended_giveaways:
-        return await interaction.response.send_message("❌ Nie znaleziono danych o tym konkursie w pamięci bota.", ephemeral=True)
+        return await interaction.response.send_message("❌ Nie znaleziono konkursu w pamięci bota.", ephemeral=True)
 
     data = ended_giveaways[m_id]
-    pool = data["pool"]
+    winner = random.choice(data["pool"])
     
-    if not pool:
-        return await interaction.response.send_message("❌ Pula uczestników jest pusta.", ephemeral=True)
+    await interaction.response.send_message(f"🔄 **REROLL!** Nowy zwycięzca konkursu o **{data['tytul']}** to: <@{winner}>!")
 
-    # Losujemy jednego nowego zwycięzcę
-    new_winner = random.choice(pool)
-    
-    await interaction.response.send_message(f"🔄 **REROLL!** Nowy zwycięzca konkursu o **{data['tytul']}** to: <@{new_winner}>! Gratulacje! 🎉")
-
-# Railway DISCORD_TOKEN
+# Start bota (Railway Variable)
 bot.run(os.getenv("DISCORD_TOKEN"))
