@@ -1,17 +1,35 @@
 import discord
-from discord import app_commands # Upewnij się, że to importujesz
+from discord.ext import commands
+from discord import app_commands
 import datetime
 import asyncio
 import random
 import re
+import os  # Dodane do obsługi zmiennych środowiskowych
 
-# ID Twojej roli dającej 2x szansy
+# --- KONFIGURACJA ---
+# Pobieranie tokenu z Railway Variables
+TOKEN = os.getenv("DISCORD_TOKEN")
 BONUS_ROLE_ID = 1497656242615746721
 
-# Słownik przechowujący dane o zakończonych giveawayach (aby greroll zadziałał)
-# Klucz to ID wiadomości (int), wartość to słownik z pulą uczestników i tytułem
+# Pamięć podręczna dla zakończonych giveawayów
 ended_giveaways = {}
 
+class GiveawayBot(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.default()
+        intents.members = True
+        intents.message_content = True
+        super().__init__(command_prefix="!", intents=intents)
+
+    async def setup_hook(self):
+        # Synchronizacja komend przy każdym restarcie (ważne na Railway)
+        await self.tree.sync()
+        print(f"✅ Zalogowano jako {self.user} i zsynchronizowano komendy.")
+
+bot = GiveawayBot()
+
+# --- WIDOK PRZYCISKU 🎉 ---
 class GiveawayView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -23,11 +41,8 @@ class GiveawayView(discord.ui.View):
             return await interaction.response.send_message("Już bierzesz udział w tym konkursie!", ephemeral=True)
         
         self.entries.append(interaction.user.id)
-        
-        # Pobieramy aktualny embed z wiadomości
         embed = interaction.message.embeds[0]
         
-        # Szukamy pola "Entries", aby je zaktualizować na żywo
         found_field = False
         for i, field in enumerate(embed.fields):
             if field.name == "Entries":
@@ -35,15 +50,13 @@ class GiveawayView(discord.ui.View):
                 found_field = True
                 break
         
-        # Jeśli z jakiegoś powodu pola nie ma, dodajemy je
         if not found_field:
             embed.add_field(name="Entries", value=str(len(self.entries)), inline=True)
 
-        # Edytujemy wiadomość konkursową z nową liczbą osób
         await interaction.message.edit(embed=embed)
-        
         await interaction.response.send_message("Pomyślnie dołączyłeś do losowania!", ephemeral=True)
 
+# --- LOGIKA CZASU ---
 def parse_time(time_str):
     pos = {"s": 1, "m": 60, "h": 3600, "d": 86400}
     match = re.match(r"(\d+)([smhd])", time_str.lower())
@@ -51,11 +64,12 @@ def parse_time(time_str):
         return int(match.group(1)) * pos[match.group(2)]
     return None
 
-async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor_hex, default_color):
+# --- GŁÓWNA LOGIKA LOSOWANIA ---
+async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor_hex):
     try:
         color_val = int(kolor_hex.replace("#", ""), 16)
     except:
-        color_val = default_color
+        color_val = 0x5865F2
 
     end_time = datetime.datetime.now() + datetime.timedelta(seconds=sekundy)
     timestamp = int(end_time.timestamp())
@@ -85,7 +99,7 @@ async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor
         await msg.edit(embed=end_embed, view=None)
         return
 
-    # Logika 2x szansy dla roli
+    # Przygotowanie puli (uwzględniając bonusową rolę)
     pool = []
     guild = interaction.guild
     for user_id in view.entries:
@@ -94,12 +108,10 @@ async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor
         if member and any(r.id == BONUS_ROLE_ID for r in member.roles):
             pool.append(user_id) 
 
-    # ZAPISUJEMY DANE DO SŁOWNIKA DLA KOMENDY /GREROLL
-    ended_giveaways[msg.id] = {
-        "pool": pool,
-        "tytul": tytul
-    }
+    # Zapisujemy do pamięci dla /greroll
+    ended_giveaways[msg.id] = {"pool": pool, "tytul": tytul}
 
+    # Losowanie
     winners_list = []
     num_winners = min(zwyciezcy, len(set(view.entries)))
     
@@ -120,39 +132,43 @@ async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor
     await msg.edit(embed=end_embed, view=None)
     await interaction.followup.send(f"🎉 Gratulacje {winner_mentions}! Wygraliście: **{tytul}**!")
 
+# --- KOMENDY SLASH ---
 
-# NOWA KOMENDA DO REROLLA (dodaj ją w miejscu gdzie definiujesz inne komendy bota, np. pod @bot.tree.command)
-@app_commands.command(name="greroll", description="Losuje ponownie zwycięzcę dla zakończonego giveawaya")
-@app_commands.describe(message_id="ID wiadomości z zakończonym giveawayem", ilosc="Ilu nowych zwycięzców wylosować? (Domyślnie 1)")
+@bot.tree.command(name="gstart", description="Uruchamia nowy giveaway")
+async def gstart(interaction: discord.Interaction, tytul: str, czas: str, zwyciezcy: int = 1, opis: str = "Kliknij 🎉 aby dołączyć!", kolor: str = "#5865F2"):
+    sekundy = parse_time(czas)
+    if not sekundy:
+        return await interaction.response.send_message("❌ Błędny czas! Przykład: `10m`, `1h`, `1d`.", ephemeral=True)
+    
+    await run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor)
+
+@bot.tree.command(name="greroll", description="Ponownie losuje zwycięzcę")
+@app_commands.describe(message_id="ID wiadomości zakończonego konkursu", ilosc="Ilu nowych zwycięzców?")
 async def greroll(interaction: discord.Interaction, message_id: str, ilosc: int = 1):
-    # Zamieniamy podane ID z tekstu na liczbę
     try:
         msg_id = int(message_id)
-    except ValueError:
-        return await interaction.response.send_message("❌ Podano nieprawidłowe ID wiadomości.", ephemeral=True)
+    except:
+        return await interaction.response.send_message("❌ To nie jest poprawne ID wiadomości.", ephemeral=True)
 
-    # Sprawdzamy czy mamy ten giveaway w pamięci
     if msg_id not in ended_giveaways:
-        return await interaction.response.send_message("❌ Nie znaleziono danych o tym giveawayu w pamięci bota. (Mógł zostać zresetowany).", ephemeral=True)
+        return await interaction.response.send_message("❌ Nie mam tego konkursu w pamięci. (Restart bota czyści pamięć).", ephemeral=True)
 
-    giveaway_data = ended_giveaways[msg_id]
-    pool = giveaway_data["pool"]
-    tytul = giveaway_data["tytul"]
-
-    if not pool:
-        return await interaction.response.send_message("❌ Nikt nie wziął udziału w tym giveawayu.", ephemeral=True)
-
-    # Logika losowania nowych zwycięzców
-    winners_list = []
-    # Używamy set(pool), aby nie wylosować więcej zwycięzców niż było faktycznych uczestników
-    num_winners = min(ilosc, len(set(pool))) 
+    data = ended_giveaways[msg_id]
+    pool = data["pool"]
     
-    while len(winners_list) < num_winners:
-        chosen = random.choice(pool)
-        if chosen not in winners_list:
-            winners_list.append(chosen)
+    new_winners = []
+    num_to_draw = min(ilosc, len(set(pool)))
 
-    winner_mentions = ", ".join([f"<@{w}>" for w in winners_list])
+    while len(new_winners) < num_to_draw:
+        winner = random.choice(pool)
+        if winner not in new_winners:
+            new_winners.append(winner)
 
-    # Wysyłamy ogłoszenie o nowym zwycięzcy
-    await interaction.response.send_message(f"🔄 **REROLL!** Nowy zwycięzca dla **{tytul}** to: {winner_mentions}! Gratulacje! 🎉")
+    mentions = ", ".join([f"<@{w}>" for w in new_winners])
+    await interaction.response.send_message(f"🔄 **REROLL!** Nowy zwycięzca: {mentions}! 🎉")
+
+# Uruchomienie bota
+if TOKEN:
+    bot.run(TOKEN)
+else:
+    print("❌ BŁĄD: Nie znaleziono zmiennej DISCORD_TOKEN w Railway Variables!")
