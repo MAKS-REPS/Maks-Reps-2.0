@@ -125,7 +125,7 @@ class MyBot(commands.Bot):
 
 bot = MyBot()
 
-@bot.tree.command(name="gstart", description="Uruchamia giveaway")
+@bot.tree.command(name="givcreate", description="Uruchamia giveaway")
 async def gstart(interaction: discord.Interaction, tytul: str, czas: str, zwyciezcy: int = 1, opis: str = "Kliknij 🎉 aby dołączyć!"):
     sekundy = parse_time(czas)
     if not sekundy:
