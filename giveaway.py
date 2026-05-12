@@ -1,5 +1,5 @@
 import discord
-from discord import app_commands
+from discord import app_commands # Upewnij się, że to importujesz
 import datetime
 import asyncio
 import random
@@ -8,9 +8,9 @@ import re
 # ID Twojej roli dającej 2x szansy
 BONUS_ROLE_ID = 1497656242615746721
 
-# Prosty cache w pamięci bota (zniknie po restarcie bota)
-# Klucz: message_id, Wartość: lista ID użytkowników
-giveaway_cache = {}
+# Słownik przechowujący dane o zakończonych giveawayach (aby greroll zadziałał)
+# Klucz to ID wiadomości (int), wartość to słownik z pulą uczestników i tytułem
+ended_giveaways = {}
 
 class GiveawayView(discord.ui.View):
     def __init__(self):
@@ -24,7 +24,10 @@ class GiveawayView(discord.ui.View):
         
         self.entries.append(interaction.user.id)
         
+        # Pobieramy aktualny embed z wiadomości
         embed = interaction.message.embeds[0]
+        
+        # Szukamy pola "Entries", aby je zaktualizować na żywo
         found_field = False
         for i, field in enumerate(embed.fields):
             if field.name == "Entries":
@@ -32,10 +35,13 @@ class GiveawayView(discord.ui.View):
                 found_field = True
                 break
         
+        # Jeśli z jakiegoś powodu pola nie ma, dodajemy je
         if not found_field:
             embed.add_field(name="Entries", value=str(len(self.entries)), inline=True)
 
+        # Edytujemy wiadomość konkursową z nową liczbą osób
         await interaction.message.edit(embed=embed)
+        
         await interaction.response.send_message("Pomyślnie dołączyłeś do losowania!", ephemeral=True)
 
 def parse_time(time_str):
@@ -44,28 +50,6 @@ def parse_time(time_str):
     if match:
         return int(match.group(1)) * pos[match.group(2)]
     return None
-
-def pick_winners(entries, guild, num_winners):
-    """Funkcja pomocnicza do losowania zwycięzców z uwzględnieniem bonusowej roli."""
-    if not entries:
-        return []
-    
-    pool = []
-    for user_id in entries:
-        pool.append(user_id) 
-        member = guild.get_member(user_id)
-        if member and any(r.id == BONUS_ROLE_ID for r in member.roles):
-            pool.append(user_id) # Druga szansa
-
-    winners_list = []
-    actual_num_winners = min(num_winners, len(set(entries)))
-    
-    while len(winners_list) < actual_num_winners:
-        chosen = random.choice(pool)
-        if chosen not in winners_list:
-            winners_list.append(chosen)
-            
-    return winners_list
 
 async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor_hex, default_color):
     try:
@@ -94,9 +78,6 @@ async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor
 
     await asyncio.sleep(sekundy)
 
-    # Zapisujemy uczestników do cache, aby umożliwić /greroll
-    giveaway_cache[msg.id] = view.entries
-
     if not view.entries:
         end_embed = embed.copy()
         end_embed.description = f"Zakończono! Nikt nie wziął udziału w: **{tytul}**"
@@ -104,7 +85,29 @@ async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor
         await msg.edit(embed=end_embed, view=None)
         return
 
-    winners_list = pick_winners(view.entries, interaction.guild, zwyciezcy)
+    # Logika 2x szansy dla roli
+    pool = []
+    guild = interaction.guild
+    for user_id in view.entries:
+        pool.append(user_id) 
+        member = guild.get_member(user_id)
+        if member and any(r.id == BONUS_ROLE_ID for r in member.roles):
+            pool.append(user_id) 
+
+    # ZAPISUJEMY DANE DO SŁOWNIKA DLA KOMENDY /GREROLL
+    ended_giveaways[msg.id] = {
+        "pool": pool,
+        "tytul": tytul
+    }
+
+    winners_list = []
+    num_winners = min(zwyciezcy, len(set(view.entries)))
+    
+    while len(winners_list) < num_winners:
+        chosen = random.choice(pool)
+        if chosen not in winners_list:
+            winners_list.append(chosen)
+
     winner_mentions = ", ".join([f"<@{w}>" for w in winners_list])
 
     end_embed = embed.copy()
@@ -117,45 +120,39 @@ async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor
     await msg.edit(embed=end_embed, view=None)
     await interaction.followup.send(f"🎉 Gratulacje {winner_mentions}! Wygraliście: **{tytul}**!")
 
-# --- NOWA KOMENDA REROLL ---
 
-@app_commands.command(name="greroll", description="Losuje nowego zwycięzcę zakońćzonego giveawayu")
-@app_commands.describe(message_id="ID wiadomości z zakończonym giveawayem")
-@app_commands.checks.has_permissions(manage_messages=True)
-async def greroll(interaction: discord.Interaction, message_id: str):
+# NOWA KOMENDA DO REROLLA (dodaj ją w miejscu gdzie definiujesz inne komendy bota, np. pod @bot.tree.command)
+@app_commands.command(name="greroll", description="Losuje ponownie zwycięzcę dla zakończonego giveawaya")
+@app_commands.describe(message_id="ID wiadomości z zakończonym giveawayem", ilosc="Ilu nowych zwycięzców wylosować? (Domyślnie 1)")
+async def greroll(interaction: discord.Interaction, message_id: str, ilosc: int = 1):
+    # Zamieniamy podane ID z tekstu na liczbę
     try:
         msg_id = int(message_id)
     except ValueError:
-        return await interaction.response.send_message("Podaj poprawne ID wiadomości.", ephemeral=True)
+        return await interaction.response.send_message("❌ Podano nieprawidłowe ID wiadomości.", ephemeral=True)
 
-    if msg_id not in giveaway_cache:
-        return await interaction.response.send_message(
-            "Nie znaleziono tego giveawayu w pamięci (mógł zostać zakończony przed restartem bota).", 
-            ephemeral=True
-        )
+    # Sprawdzamy czy mamy ten giveaway w pamięci
+    if msg_id not in ended_giveaways:
+        return await interaction.response.send_message("❌ Nie znaleziono danych o tym giveawayu w pamięci bota. (Mógł zostać zresetowany).", ephemeral=True)
 
-    entries = giveaway_cache[msg_id]
-    if not entries:
-        return await interaction.response.send_message("W tym konkursie nie było uczestników.", ephemeral=True)
+    giveaway_data = ended_giveaways[msg_id]
+    pool = giveaway_data["pool"]
+    tytul = giveaway_data["tytul"]
 
-    try:
-        channel = interaction.channel
-        msg = await channel.fetch_message(msg_id)
-    except Exception:
-        return await interaction.response.send_message("Nie udało się odnaleźć wiadomości na tym kanale.", ephemeral=True)
+    if not pool:
+        return await interaction.response.send_message("❌ Nikt nie wziął udziału w tym giveawayu.", ephemeral=True)
 
-    # Pobieramy liczbę zwycięzców z oryginalnego embeda (jeśli się da)
-    # W tym kodzie zakładamy, że reroll losuje 1 nową osobę lub tylu, ilu było w polu Winners.
-    # Dla uproszczenia wylosujemy 1 nową osobę jako "rerolled winner".
+    # Logika losowania nowych zwycięzców
+    winners_list = []
+    # Używamy set(pool), aby nie wylosować więcej zwycięzców niż było faktycznych uczestników
+    num_winners = min(ilosc, len(set(pool))) 
     
-    new_winner_id = pick_winners(entries, interaction.guild, 1)
-    
-    if not new_winner_id:
-        return await interaction.response.send_message("Nie udało się wylosować zwycięzcy.", ephemeral=True)
+    while len(winners_list) < num_winners:
+        chosen = random.choice(pool)
+        if chosen not in winners_list:
+            winners_list.append(chosen)
 
-    winner_mention = f"<@{new_winner_id[0]}>"
-    
-    await interaction.response.send_message(f"🎉 Nowy zwycięzca (reroll): {winner_mention}! Gratulacje!")
-    await channel.send(f"Nowym zwycięzcą giveawayu (ID: {msg_id}) zostaje: {winner_mention}!")
+    winner_mentions = ", ".join([f"<@{w}>" for w in winners_list])
 
-# Nie zapomnij dodać komendy do drzewa bota (client.tree.add_command(greroll))
+    # Wysyłamy ogłoszenie o nowym zwycięzcy
+    await interaction.response.send_message(f"🔄 **REROLL!** Nowy zwycięzca dla **{tytul}** to: {winner_mentions}! Gratulacje! 🎉")
