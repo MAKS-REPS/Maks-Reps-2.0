@@ -3,15 +3,12 @@ import datetime
 import asyncio
 import random
 import re
-import os
-from discord.ext import commands
-from discord import app_commands
+
+# Słownik przechowujący dane do rerolla (musi być dostępny dla bot.py)
+giveaway_cache = {}
 
 # ID Twojej roli dającej 2x szansy
 BONUS_ROLE_ID = 1497656242615746721
-
-# Słownik do przechowywania uczestników zakończonych giveawayów (pod reroll)
-giveaway_cache = {}
 
 class GiveawayView(discord.ui.View):
     def __init__(self):
@@ -24,7 +21,6 @@ class GiveawayView(discord.ui.View):
             return await interaction.response.send_message("Już bierzesz udział w tym konkursie!", ephemeral=True)
         
         self.entries.append(interaction.user.id)
-        
         embed = interaction.message.embeds[0]
         
         found_field = False
@@ -89,7 +85,7 @@ async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor
         if member and any(r.id == BONUS_ROLE_ID for r in member.roles):
             pool.append(user_id) 
 
-    # ZAPISUJEMY DANE DO CACHE (Dla komendy greroll)
+    # --- KLUCZOWY DODATEK: ZAPIS DO CACHE ---
     giveaway_cache[msg.id] = {"pool": pool, "tytul": tytul}
 
     winners_list = []
@@ -111,49 +107,3 @@ async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor
 
     await msg.edit(embed=end_embed, view=None)
     await interaction.followup.send(f"🎉 Gratulacje {winner_mentions}! Wygraliście: **{tytul}**!")
-
-# --- SEKCOJA BOT SETUP ---
-
-class MyBot(commands.Bot):
-    def __init__(self):
-        intents = discord.Intents.default()
-        intents.members = True
-        super().__init__(command_prefix="!", intents=intents)
-
-    async def setup_hook(self):
-        await self.tree.sync()
-
-bot = MyBot()
-
-@bot.tree.command(name="givcreate", description="Uruchamia giveaway")
-async def gstart(interaction: discord.Interaction, tytul: str, czas: str, zwyciezcy: int = 1, opis: str = "Kliknij 🎉 aby dołączyć!"):
-    sekundy = parse_time(czas)
-    if not sekundy:
-        return await interaction.response.send_message("Błędny czas!", ephemeral=True)
-    await run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, "#5865F2", 0x5865f2)
-
-# --- NOWA KOMENDA GREROLL ---
-
-@bot.tree.command(name="greroll", description="Losuje nową osobę z zakończonego konkursu")
-@app_commands.describe(message_id="ID wiadomości z zakończonym konkursem")
-async def greroll(interaction: discord.Interaction, message_id: str):
-    try:
-        msg_id = int(message_id)
-    except ValueError:
-        return await interaction.response.send_message("Musisz podać poprawne ID wiadomości (same cyfry).", ephemeral=True)
-
-    if msg_id not in giveaway_cache:
-        return await interaction.response.send_message("Nie znaleziono tego konkursu w pamięci bota (mogło minąć zbyt dużo czasu lub bot był restartowany).", ephemeral=True)
-
-    data = giveaway_cache[msg_id]
-    pool = data["pool"]
-    tytul = data["tytul"]
-
-    if not pool:
-        return await interaction.response.send_message("Brak uczestników do rozlosowania.", ephemeral=True)
-
-    new_winner = random.choice(pool)
-    
-    await interaction.response.send_message(f"🔄 **REROLL!** Nowy zwycięzca konkursu o **{tytul}** to: <@{new_winner}>! Gratulacje!")
-
-bot.run(os.getenv("DISCORD_TOKEN"))
