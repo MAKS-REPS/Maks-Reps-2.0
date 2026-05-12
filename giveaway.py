@@ -4,13 +4,14 @@ import asyncio
 import random
 import re
 
-# Słownik przechowujący dane do rerolla (musi być dostępny dla bot.py)
-giveaway_cache = {}
+# --- DODAJ TYLKO TĘ LINIĘ ---
+giveaway_cache = {} 
 
 # ID Twojej roli dającej 2x szansy
 BONUS_ROLE_ID = 1497656242615746721
 
 class GiveawayView(discord.ui.View):
+    # ... (cała Twoja klasa GiveawayView bez zmian) ...
     def __init__(self):
         super().__init__(timeout=None)
         self.entries = []
@@ -19,20 +20,16 @@ class GiveawayView(discord.ui.View):
     async def join_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id in self.entries:
             return await interaction.response.send_message("Już bierzesz udział w tym konkursie!", ephemeral=True)
-        
         self.entries.append(interaction.user.id)
         embed = interaction.message.embeds[0]
-        
         found_field = False
         for i, field in enumerate(embed.fields):
             if field.name == "Entries":
                 embed.set_field_at(i, name="Entries", value=str(len(self.entries)), inline=True)
                 found_field = True
                 break
-        
         if not found_field:
             embed.add_field(name="Entries", value=str(len(self.entries)), inline=True)
-
         await interaction.message.edit(embed=embed)
         await interaction.response.send_message("Pomyślnie dołączyłeś do losowania!", ephemeral=True)
 
@@ -44,6 +41,7 @@ def parse_time(time_str):
     return None
 
 async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor_hex, default_color):
+    # ... (początek Twojej funkcji bez zmian) ...
     try:
         color_val = int(kolor_hex.replace("#", ""), 16)
     except:
@@ -52,12 +50,7 @@ async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor
     end_time = datetime.datetime.now() + datetime.timedelta(seconds=sekundy)
     timestamp = int(end_time.timestamp())
 
-    embed = discord.Embed(
-        title=tytul,
-        description=opis.replace("\\n", "\n"), 
-        color=discord.Color(color_val)
-    )
-    
+    embed = discord.Embed(title=tytul, description=opis.replace("\\n", "\n"), color=discord.Color(color_val))
     embed.add_field(name="Ends:", value=f"<t:{timestamp}:R> (<t:{timestamp}:f>)", inline=False)
     embed.add_field(name="Hosted by:", value=interaction.user.mention, inline=True)
     embed.add_field(name="Winners:", value=str(zwyciezcy), inline=True)
@@ -85,19 +78,17 @@ async def run_giveaway_logic(interaction, tytul, opis, sekundy, zwyciezcy, kolor
         if member and any(r.id == BONUS_ROLE_ID for r in member.roles):
             pool.append(user_id) 
 
-    # --- KLUCZOWY DODATEK: ZAPIS DO CACHE ---
+    # --- DODAJ TYLKO TĘ LINIĘ TUTAJ (zapisuje dane do rerolla) ---
     giveaway_cache[msg.id] = {"pool": pool, "tytul": tytul}
 
     winners_list = []
     num_winners = min(zwyciezcy, len(set(view.entries)))
-    
     while len(winners_list) < num_winners:
         chosen = random.choice(pool)
         if chosen not in winners_list:
             winners_list.append(chosen)
 
     winner_mentions = ", ".join([f"<@{w}>" for w in winners_list])
-
     end_embed = embed.copy()
     end_embed.description = f"Zakończono! Nagroda: **{tytul}**"
     end_embed.clear_fields()
