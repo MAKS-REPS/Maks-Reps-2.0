@@ -6,9 +6,16 @@ async def setup_embed_command(bot, REQUIRED_ROLE_ID, MAKS_BLUE):
     @app_commands.describe(
         tytul="Nagłówek wiadomości",
         opis="Treść (możesz oznaczać role używając <@&ID_ROLI>)",
-        kolor="Kolor paska HEX (np. #ff0000 lub zostaw puste)"
+        kolor="Kolor paska HEX (np. #ff0000 lub zostaw puste)",
+        obraz="Przeciągnij tutaj zdjęcie, które ma się pojawić w wiadomości"
     )
-    async def create_embed(interaction: discord.Interaction, tytul: str, opis: str, kolor: str = None):
+    async def create_embed(
+        interaction: discord.Interaction, 
+        tytul: str, 
+        opis: str, 
+        kolor: str = None, 
+        obraz: discord.Attachment = None  # Dodany parametr zdjęcia
+    ):
         # Sprawdzenie uprawnień
         if not any(role.id == REQUIRED_ROLE_ID for role in interaction.user.roles):
             return await interaction.response.send_message("❌ Brak uprawnień do używania tej komendy.", ephemeral=True)
@@ -23,9 +30,7 @@ async def setup_embed_command(bot, REQUIRED_ROLE_ID, MAKS_BLUE):
         else:
             embed_color = MAKS_BLUE
 
-        # Obsługa formatowania:
-        # 1. Zamiana \n na prawdziwe nowe linie
-        # 2. Discord sam zamieni <@&ID> na nazwę roli w opisie
+        # Obsługa formatowania opisu
         format_opis = opis.replace("\\n", "\n")
         
         new_embed = discord.Embed(
@@ -34,10 +39,17 @@ async def setup_embed_command(bot, REQUIRED_ROLE_ID, MAKS_BLUE):
             color=embed_color
         )
         
-        # Tutaj dodałem Twój znaczek:
+        # Jeśli użytkownik dodał zdjęcie, ustawiamy je w embedzie
+        if obraz:
+            # Sprawdzamy czy plik to na pewno obrazek (opcjonalnie)
+            if any(obraz.filename.lower().endswith(ext) for ext in ['png', 'jpg', 'jpeg', 'gif', 'webp']):
+                new_embed.set_image(url=obraz.url)
+            else:
+                return await interaction.response.send_message("❌ Przesłany plik nie jest obsługiwanym obrazem!", ephemeral=True)
+        
         new_embed.set_footer(text=f"Wysłane przez: {interaction.user.display_name} • Made By Maks.R3ps")
 
-        # Wysłanie potwierdzenia (widoczne tylko dla Ciebie)
+        # Wysłanie potwierdzenia
         await interaction.response.send_message("✅ Embed wysłany!", ephemeral=True)
         
         # Wysłanie właściwego embeda na kanał
