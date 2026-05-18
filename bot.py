@@ -6,7 +6,6 @@ import random # Potrzebne do losowania w reroll
 
 # --- IMPORTY TWOICH MODUŁÓW ---
 from welcome import handle_welcome
-from dm import send_welcome_dm
 from roles import RoleViewAll, RoleViewPromo, RoleViewTikTok
 from tickets import TicketView
 # ZAKTUALIZOWANY IMPORT (dodano giveaway_cache)
@@ -64,7 +63,6 @@ async def on_ready():
 @bot.event
 async def on_member_join(member):
     await handle_welcome(member, WELCOME_CHANNEL_ID, MAKS_BLUE)
-    await send_welcome_dm(member, MAKS_BLUE)
 
 # --- KOMENDA /PANEL (ROLE I TICKETY) ---
 @bot.tree.command(name="panel", description="Wybierz typ panelu do wysłania")
