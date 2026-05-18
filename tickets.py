@@ -11,7 +11,8 @@ class TicketMenu(discord.ui.Select):
             discord.SelectOption(label="POMOC", description="Ogólna pomoc i pytania", emoji="❓"),
             discord.SelectOption(label="POMOC Z ZAMÓWIENIEM", description="Kliknij, jeśli potrzebujesz pomocy z zamówieniem", emoji="🛒"),
             discord.SelectOption(label="PROBLEM Z SHIPPINGIEM", description="Kliknij, jeśli masz problem z shippingiem", emoji="🚛"),
-            discord.SelectOption(label="DOSTĘP", description="Kliknij, aby uzyskać dostęp", emoji="🔑"), # Zmieniono z bota na dostęp
+            discord.SelectOption(label="DOSTĘP", description="Kliknij, aby uzyskać dostęp", emoji="🔑"),
+            discord.SelectOption(label="WSPÓŁPRACA", description="Chcesz zostać naszym promotorem? Kliknij tutaj!", emoji="🤝"), # Nowa kategoria
         ]
         super().__init__(
             placeholder="❌ Nie wybrano żadnej z kategorii", 
