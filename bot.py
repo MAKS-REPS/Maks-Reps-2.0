@@ -14,6 +14,8 @@ from embeds import setup_embed_command
 from moderation import setup_moderation
 from verify import VerifyView, setup_verify
 from antiscam import setup_antiscam
+# 🔥 NOWY IMPORT: System śledzenia zaproszeń
+from invite_tracker import InviteTrackerCog 
 
 # --- KONFIGURACJA ---
 WELCOME_CHANNEL_ID = 1457756805173084309
@@ -40,15 +42,17 @@ class MaksBot(commands.Bot):
         self.add_view(VerifyView(VERIFY_ROLE_ID))
         
         # 2. Inicjalizacja komend i systemów modułowych
-        # WAŻNE: Funkcja setup_embed_command teraz obsługuje opcję zdjęć
         await setup_embed_command(self, REQUIRED_ROLE_ID, MAKS_BLUE)
         await setup_moderation(self)
         await setup_verify(self)
         await setup_antiscam(self)
         
+        # 🔥 REJESTRACJA COGA: Dodajemy system Invite Trackera do bota
+        await self.add_cog(InviteTrackerCog(self))
+        
         # 3. Synchronizacja komend slash z Discordem
         await self.tree.sync()
-        print(f"✅ Maks Reps 2.0: Wszystkie systemy (w tym Anti-Scam i Reroll) są online.")
+        print(f"✅ Maks Reps 2.0: Wszystkie systemy (w tym Invite Tracker) są online.")
 
 bot = MaksBot()
 
@@ -59,10 +63,14 @@ async def on_ready():
     await bot.change_presence(status=discord.Status.online, activity=activity)
     print(f"🚀 Zalogowano jako: {bot.user}")
 
-# --- POWITANIA ---
+# --- POWITANIA I ZAPROSZENIA ---
 @bot.event
 async def on_member_join(member):
+    # 1. Wysyłamy tradycyjną grafikę/wiadomość powitalną na główny kanał powitań
     await handle_welcome(member, WELCOME_CHANNEL_ID, MAKS_BLUE)
+    
+    # 2. Wywołujemy tracker zaproszeń, który jest zarejestrowany jako osobnym listener w swoim pliku.
+    # Discord automatycznie przekaże zdarzenie do 'invite_tracker.py' i wyśle loga na kanał 1483135652815179898.
 
 # --- KOMENDA /PANEL (ROLE I TICKETY) ---
 @bot.tree.command(name="panel", description="Wybierz typ panelu do wysłania")
