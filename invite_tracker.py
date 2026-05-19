@@ -1,6 +1,5 @@
 import discord
 from discord.ext import commands
-import os
 
 class InviteTrackerCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -24,13 +23,15 @@ class InviteTrackerCog(commands.Cog):
         return None
 
     @commands.Cog.listener()
-    def on_invite_create(self, invite):
+    async def on_invite_create(self, invite):
+        # 🔥 Poprawiono na async def
         if invite.guild.id not in self.invites:
             self.invites[invite.guild.id] = []
         self.invites[invite.guild.id].append(invite)
 
     @commands.Cog.listener()
-    def on_invite_delete(self, invite):
+    async def on_invite_delete(self, invite):
+        # 🔥 Poprawiono na async def
         if invite.guild.id in self.invites:
             self.invites[invite.guild.id] = [inv for inv in self.invites[invite.guild.id] if inv.code != invite.code]
 
@@ -77,7 +78,6 @@ class InviteTrackerCog(commands.Cog):
 
         embed = discord.Embed(color=0x2ecc71)
         
-        # Formatowanie bez wzmianek (używamy czystego tekstu member.name / inviter.name)
         if inviter and used_invite:
             embed.title = "📥 NOWE ZAPROSZENIE"
             embed.description = (
